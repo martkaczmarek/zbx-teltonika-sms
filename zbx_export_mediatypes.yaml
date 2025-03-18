@@ -1,0 +1,84 @@
+zabbix_export:
+  version: '7.0'
+  media_types:
+    - name: 'Teltonika SMS gateway'
+      type: WEBHOOK
+      parameters:
+        - name: Message
+          value: '{ALERT.MESSAGE}'
+        - name: Password
+          value: '{$TELTONIKA_PASSWORD}'
+        - name: To
+          value: '{ALERT.SENDTO}'
+        - name: URL
+          value: '{$TELTONIKA_URL}'
+        - name: Username
+          value: '{$TELTONIKA_USERNAME}'
+      script: |
+        try {
+            var params = JSON.parse(value),
+                req = new HttpRequest(),
+        		requestURL,
+                response;
+            if (!params.Username) {
+                throw 'Username parameter is required';
+            }
+            if (!params.Password) {
+                throw 'Password parameter is required';
+            }
+            if (!params.URL) {
+                throw 'URL parameter is required';
+            }
+            if (!params.Message) {
+                throw 'Message parameter is required';
+            }
+            if (!params.To) {
+                throw 'To parameter is required';
+            }
+        	requestURL = params.URL;
+        	requestURL +=  '?username=' + encodeURIComponent(params.Username);
+        	requestURL += '&password='  + encodeURIComponent(params.Password);
+        	requestURL += '&number='  + encodeURIComponent(params.To);
+        	requestURL += '&text='  + encodeURIComponent(params.Message);
+            Zabbix.log(4, '[ Teltonika SMS webhook] Webhook request with url=' + requestURL);
+            response = req.get(requestURL);
+            Zabbix.log(4, '[ Teltonika SMS webhook] Responded with code: ' + req.getStatus() + '. Response: ' + response);
+            if (req.getStatus() !== 200 || !(/^OK\s(?:\d+\/\d+\s)*/.test(response))) {
+        		//we're testing for either an "OK" response or "OK 2/2" for sending a multi-part message
+                throw 'HTTP response code: ' + req.getStatus() + ', response: ' + response;
+            }
+            return response;
+        }
+        catch (error) {
+            Zabbix.log(3, '[ Teltonika SMS webhook] Sending failed. Error: ' + error);
+            throw 'Failed with error: ' + error;
+        }
+      description: |
+        A script for sending SMS messages with Teltonika routers, using its SMS Gateway function. 
+        
+        "To" parameter should contain a phone number in one of two formats:
+        1. A local number without country code
+        2. A number with country code, prefixed with '00'. So, for example for Polish number that would be '0048xxxxxxxxx'. 
+        
+        The three parameters tat need to be set are URL, Username and Password. 
+        You can do it by creating specified user macros or replacing the macros with literal values here. 
+        URL should have the form of:
+        http://<IP>/cgi-bin/sms_send
+        
+        To set username and password, go to your Teltonika device web UI and select Services -> SMS Gateway -> Post/Get Configuration. Check "Enable" and set your username and password. These are not the credentials you use for web UI. 
+        
+        Source:
+        https://github.com/martkaczmarek/zbx-teltonika-sms
+        
+        For more details visit Teltonika docs:
+        https://wiki.teltonika-networks.com/view/RUT240_SMS_Gateway
+      message_templates:
+        - event_source: TRIGGERS
+          operation_mode: PROBLEM
+          message: '{HOST.NAME} {EVENT.NAME} at {EVENT.DATE} {EVENT.TIME} for last {EVENT.DURATION}, current data: {EVENT.OPDATA}'
+        - event_source: TRIGGERS
+          operation_mode: RECOVERY
+          message: 'Resolved ''{HOST.NAME} {EVENT.RECOVERY.NAME}'' in {EVENT.DURATION}, current data: {EVENT.OPDATA}'
+        - event_source: TRIGGERS
+          operation_mode: UPDATE
+          message: '{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem in {EVENT.AGE} at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}'

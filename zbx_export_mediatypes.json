@@ -1,0 +1,52 @@
+{
+    "zabbix_export": {
+        "version": "7.0",
+        "media_types": [
+            {
+                "name": "Teltonika SMS gateway",
+                "type": "WEBHOOK",
+                "parameters": [
+                    {
+                        "name": "Message",
+                        "value": "{ALERT.MESSAGE}"
+                    },
+                    {
+                        "name": "Password",
+                        "value": "{$TELTONIKA_PASSWORD}"
+                    },
+                    {
+                        "name": "To",
+                        "value": "{ALERT.SENDTO}"
+                    },
+                    {
+                        "name": "URL",
+                        "value": "{$TELTONIKA_URL}"
+                    },
+                    {
+                        "name": "Username",
+                        "value": "{$TELTONIKA_USERNAME}"
+                    }
+                ],
+                "script": "try {\n    var params = JSON.parse(value),\n        req = new HttpRequest(),\n\t\trequestURL,\n        response;\n    if (!params.Username) {\n        throw 'Username parameter is required';\n    }\n    if (!params.Password) {\n        throw 'Password parameter is required';\n    }\n    if (!params.URL) {\n        throw 'URL parameter is required';\n    }\n    if (!params.Message) {\n        throw 'Message parameter is required';\n    }\n    if (!params.To) {\n        throw 'To parameter is required';\n    }\n\trequestURL = params.URL;\n\trequestURL +=  '?username=' + encodeURIComponent(params.Username);\n\trequestURL += '&password='  + encodeURIComponent(params.Password);\n\trequestURL += '&number='  + encodeURIComponent(params.To);\n\trequestURL += '&text='  + encodeURIComponent(params.Message);\n    Zabbix.log(4, '[ Teltonika SMS webhook] Webhook request with url=' + requestURL);\n    response = req.get(requestURL);\n    Zabbix.log(4, '[ Teltonika SMS webhook] Responded with code: ' + req.getStatus() + '. Response: ' + response);\n    if (req.getStatus() !== 200 || !(/^OK\\s(?:\\d+\\/\\d+\\s)*/.test(response))) {\n\t\t//we're testing for either an \"OK\" response or \"OK 2/2\" for sending a multi-part message\n        throw 'HTTP response code: ' + req.getStatus() + ', response: ' + response;\n    }\n    return response;\n}\ncatch (error) {\n    Zabbix.log(3, '[ Teltonika SMS webhook] Sending failed. Error: ' + error);\n    throw 'Failed with error: ' + error;\n}",
+                "description": "A script for sending SMS messages with Teltonika routers, using its SMS Gateway function. \n\n\"To\" parameter should contain a phone number in one of two formats:\n1. A local number without country code\n2. A number with country code, prefixed with '00'. So, for example for Polish number that would be '0048xxxxxxxxx'. \n\nThe three parameters tat need to be set are URL, Username and Password. \nYou can do it by creating specified user macros or replacing the macros with literal values here. \nURL should have the form of:\nhttp://<IP>/cgi-bin/sms_send\n\nTo set username and password, go to your Teltonika device web UI and select Services -> SMS Gateway -> Post/Get Configuration. Check \"Enable\" and set your username and password. These are not the credentials you use for web UI. \n\nSource:\nhttps://github.com/martkaczmarek/zbx-teltonika-sms\n\nFor more details visit Teltonika docs:\nhttps://wiki.teltonika-networks.com/view/RUT240_SMS_Gateway",
+                "message_templates": [
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "PROBLEM",
+                        "message": "{HOST.NAME} {EVENT.NAME} at {EVENT.DATE} {EVENT.TIME} for last {EVENT.DURATION}, current data: {EVENT.OPDATA}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "RECOVERY",
+                        "message": "Resolved '{HOST.NAME} {EVENT.RECOVERY.NAME}' in {EVENT.DURATION}, current data: {EVENT.OPDATA}"
+                    },
+                    {
+                        "event_source": "TRIGGERS",
+                        "operation_mode": "UPDATE",
+                        "message": "{USER.FULLNAME} {EVENT.UPDATE.ACTION} problem in {EVENT.AGE} at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}"
+                    }
+                ]
+            }
+        ]
+    }
+}
